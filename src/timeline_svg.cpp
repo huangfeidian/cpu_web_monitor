@@ -145,6 +145,7 @@ namespace spiritsaway::cpu_web_monitor
 			return false;
 		}
 		total_usage_data[name] = usage_data;
+		return true;
 	}
 	void cpu_usage_svg::prepare()
 	{
@@ -207,15 +208,56 @@ namespace spiritsaway::cpu_web_monitor
 		output<<R"(<?xml version="1.0" standalone="no"?>)"<<std::endl;
 		output << R"(<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)" << std::endl;
 		std::string temp;
-		temp = fmt::format("<svg version=\"1.1\" width=\"{0}\" height=\"{1}\" viewBox=\"0 0 {0} {1}\" ", width, height);
+		temp = fmt::format("<svg version=\"1.1\" width=\"{0}\" height=\"{1}\" viewBox=\"0 0 {0} {1}\" onload=\"Init(evt)\" ", width, height);
 		output << temp;
 		output << R"(xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">)" << std::endl;
+
+		std::string svg_scripts = R"( <script type="text/ecmascript"><![CDATA[
+      var SVGDocument = null;
+      var SVGRoot = null;
+
+      function Init(evt)
+      {
+         SVGDocument = evt.target.ownerDocument;
+         SVGRoot = SVGDocument.documentElement;
+
+      }
+	  function ToggleOpacity(targetId)
+      {
+         var newTarget = SVGDocument.getElementById(targetId);;
+
+         var newValue = newTarget.getAttributeNS(null, 'opacity')
+
+         if ('0' != newValue)
+         {
+            newValue = '0';
+         }
+         else
+         {
+            newValue = '1';
+         }
+         newTarget.setAttributeNS(null, 'opacity', newValue);
+      }
+      function ToggleGroupOpacity(evt)
+      {
+         var cur_target = evt.target;
+         var group_name = cur_target.getAttributeNS(null, "group_name");
+         if(!group_name)
+         {
+            return;
+         }
+         var usage_ele_id = "usage_for_" +group_name;
+         ToggleOpacity(usage_ele_id);
+      }
+]]></script>
+)";
+		output << svg_scripts << std::endl;
 
 		temp = fmt::format("<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\" fill=\"{}\">{}</text>\n", x_frame_pad, ypad_before_title + 2 * font_size, fonttype, 2 * font_size, "red", title);
 		output << temp;
 
 		std::string frame_stroke_color = "red";
-		temp = fmt::format("\<polyline points=\"{0},{1} {2},{3} {4},{5} {6},{7} {0},{1}\" stroke=\"{8}\" stroke-width=\"{9}\" fill=\"none\"/>\n", x_frame_pad, begin_y, x_frame_pad, begin_y + usage_height, width - x_frame_pad, begin_y + usage_height, width - x_frame_pad, begin_y, frame_stroke_color, 2);
+		temp = fmt::format("<polyline points=\"{0},{1} {2},{3} {4},{5} {6},{7} {0},{1}\" stroke=\"{8}\" stroke-width=\"{9}\" fill=\"none\"/>\n", x_frame_pad, begin_y, x_frame_pad, begin_y + usage_height, width - x_frame_pad, begin_y + usage_height, width - x_frame_pad, begin_y, frame_stroke_color, 2);
 		output << temp;
 
 
@@ -271,7 +313,7 @@ namespace spiritsaway::cpu_web_monitor
 			auto cur_line = i / name_per_line;
 			auto cur_begin_x = x_frame_pad + (i % name_per_line)* names_x_pad;
 			auto cur_begin_y = ypad_before_title + ypad_after_title + 2 * font_size + usage_height + names_y_pad + cur_line*(font_size + names_y_pad);
-			temp = fmt::format("<line x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"{}\"/>\n", cur_begin_x, cur_begin_x + name_bar_size, cur_begin_y - font_size/2, cur_begin_y -font_size/2, cur_color.to_string(), font_size);
+			temp = fmt::format("<line x1=\"{}\" x2=\"{}\" y1=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"{}\" onclick=\"ToggleGroupOpacity(evt)\" group_name=\"{}\"/>\n", cur_begin_x, cur_begin_x + name_bar_size, cur_begin_y - font_size/2, cur_begin_y -font_size/2, cur_color.to_string(), font_size, cur_name);
 			output << temp;
 			temp = fmt::format("<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\" fill=\"{}\">{}</text>\n", cur_begin_x + font_size + name_bar_size, cur_begin_y, fonttype, font_size, cur_color.to_string(), cur_name);
 			output << temp;
@@ -286,7 +328,7 @@ namespace spiritsaway::cpu_web_monitor
 		std::string temp;
 		for (const auto& one_item : total_usage_data)
 		{
-			output << "<g>\n";
+			output << "<g id=\"" <<"usage_for_" + html_encode(one_item.first) <<"\">\n";
 			auto cur_color = color(color_provider, i);
 			for (std::size_t j = 1; j < one_item.second.size(); j++)
 			{
